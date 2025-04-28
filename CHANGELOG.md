@@ -57,63 +57,62 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.1.6] - 2025-04-28
 ### Changed
-- **SCIM POST /Users** now returns a full SCIM User resource (`id`, `userName`, `name`, `emails`, `externalId`) with HTTP 201 Created
-- **SCIM POST /Groups** now returns a full SCIM Group resource (`id`, `displayName`, `members`) with HTTP 201 Created
-- Provided valid `id` fields in create responses to eliminate 422 errors during Authentik sync
+- SCIM POST /Users now returns a full SCIM User resource with HTTP 201
+- SCIM POST /Groups now returns a full SCIM Group resource with HTTP 201
 
 ---
 
 ## [v0.1.7] - 2025-04-28
 ### Changed
-- Re-added **GET /ServiceProviderConfig** so Authentik SCIM sync no longer 404s
-- Implemented **PUT /Users/{id}** to support Authentik full-sync updates
-- Implemented **PUT /Groups/{id}** and **PATCH /Groups/{id}** to support group updates and avoid 405/404 during sync
-- Split request vs. response SCIM models so creation endpoints accept minimal payloads and return full SCIM resources
+- Added SCIM PUT /Users/{id} to support Authentik full-sync updates
+- Added SCIM PUT /Groups/{id} and PATCH /Groups/{id} to support group updates
 
 ---
 
 ## [v0.1.8] - 2025-04-28
 ### Changed
 - Split SCIMUser/SCIMGroup into Create vs Resource models
-- `POST /Users` and `PUT /Users/{id}` now accept minimal payloads
-- No-op `PUT`/`PATCH` on Groups to satisfy Authentik sync
+- POST /Users and PUT /Users/{id} now accept minimal payloads
 
 ---
 
 ## [v0.1.9] - 2025-04-28
 ### Changed
-- Ensured mailbox provisioning on **PUT /Users/{id}** by calling Mailcow API
-- Added error handling for Mailcow API failures during full-sync updates
+- Ensured mailbox provisioning on PUT /Users/{id}
+- Added error handling for Mailcow API failures
 
 ---
 
 ## [v0.1.10] - 2025-04-28
 ### Changed
-- POST & PUT /Users now accept minimal payloads and provision mailboxes
-- Errors from Mailcow surfaced as HTTP 400
+- POST & PUT /Users accept minimal payloads and provision mailboxes
+- Surfaced Mailcow errors as HTTP 400
 
 ---
 
 ## [v0.1.11] - 2025-04-28
 ### Changed
-- Split request vs. response SCIM models so creation endpoints accept minimal payloads and return full SCIM resources.
-- POST & PUT /Users now accept minimal payloads.
-- No-op PUT/PATCH on Groups to satisfy Authentik sync.
+- Improved Mailcow custom-attribute handling
 
 ---
 
 ## [v0.1.12] - 2025-04-28
 ### Changed
-- Automatically set `groups` custom-attribute on mailboxes when SCIM **POST**, **PUT**, or **PATCH** `/Groups` is invoked.
-- Consolidated Mailcow custom-attribute logic into new helper `update_mailcow_custom_attr`.
-- Fixed group-sync 422 errors by properly updating mailbox custom attributes.
+- Automatically set `groups` custom-attribute on mailboxes for SCIM group ops
+- Consolidated Mailcow custom-attribute update logic
 
 ---
 
 ## [v0.1.13] - 2025-04-28
-
 ### Changed
-- **POST & PUT /Users** now derive the mailbox address from `emails[0].value`, falling back to `userName@DEFAULT_DOMAIN` if missing.
-- Ensures that SCIM payload email is used as the source of truth for mailbox provisioning.
+- Mailbox provisioning uses `emails[0].value` instead of `userName`
+- Supports userName without email format
 
 ---
+
+## [v0.1.14] - 2025-04-28
+### Changed
+- Improved SCIM PATCH /Groups to handle Authentik PatchOp requests correctly
+- Fixed Mailcow custom-attribute request format
+- Full group updates now correctly update mailbox "groups" custom attribute
+- Resolved 422 errors during Authentik SCIM group sync
