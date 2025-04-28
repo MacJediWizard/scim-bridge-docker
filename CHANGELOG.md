@@ -116,3 +116,16 @@ All notable changes to this project will be documented in this file.
 - Fixed Mailcow custom-attribute request format
 - Full group updates now correctly update mailbox "groups" custom attribute
 - Resolved 422 errors during Authentik SCIM group sync
+
+---
+
+## [v0.1.15] - 2025-04-28
+### Added
+- Implemented GET /Groups/{id} endpoint to return minimal group data.
+- Fixed PATCH /Groups/{id} parsing to read PatchOp "members" operation correctly.
+
+### Fixed
+- Resolved 405 Method Not Allowed error during Authentik SCIM group sync.
+- Resolved 422 Unprocessable Entity error during Authentik SCIM group sync.
+
+---

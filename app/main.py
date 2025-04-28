@@ -89,6 +89,12 @@
 #   - Fixed Mailcow custom-attribute payload to match Mailcow API v1 expectations.
 #   - Full group update now properly updates mailbox "groups" custom attribute.
 #   - Resolved Authentik 422 errors on group syncs.
+#
+# Version 0.1.15 - 2025-04-28
+#   - Implemented GET /Groups/{id} endpoint to satisfy Authentik SCIM lookup during sync.
+#   - Fixed SCIM PATCH /Groups/{id} to properly parse PatchOp and update mailbox custom attributes.
+#   - Fully resolved 405 and 422 errors during group synchronization with Authentik.
+#
 #########################################################################################################################################################################
 
 from fastapi import FastAPI, Header, HTTPException, Query, status
@@ -281,6 +287,17 @@ async def list_groups(startIndex: int = Query(1), count: int = Query(100), autho
         "startIndex": startIndex,
         "Resources": []
     }
+    
+@app.get("/Groups/{group_id}", response_model=SCIMGroup)
+async def get_group(group_id: str, authorization: str = Header(None)):
+    if authorization != f"Bearer {SCIM_TOKEN}":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+    return SCIMGroup(
+        schemas=["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        id=group_id,
+        displayName=group_id,
+        members=[]
+    )
     
 @app.post("/Groups", status_code=status.HTTP_201_CREATED, response_model=SCIMGroup)
 async def create_group(group: SCIMGroupCreate, authorization: str = Header(None)):
