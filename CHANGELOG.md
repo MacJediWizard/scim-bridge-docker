@@ -14,3 +14,12 @@ All notable changes to this project will be documented in this file.
 - Docker Compose configuration
 - `.env.example` environment template
 - Healthcheck endpoint
+
+---
+
+## [v0.1.1] - 2025-04-28
+
+### Added
+- Added full Portainer deployment instructions (`PORTAINER.md`)
+- Added manual environment variable setup notes
+- Improved documentation for Docker stack usage

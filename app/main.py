@@ -1,3 +1,38 @@
+#########################################################################################################################################################################
+#
+# MacJediWizard Consulting, Inc.
+# Copyright (c) 2025 MacJediWizard Consulting, Inc.
+# All rights reserved.
+# Created by: William Grzybowski
+#
+# Script: main.py
+#
+# Description:
+# - This FastAPI application serves as a SCIM 2.0 bridge for provisioning Mailcow mailboxes.
+# - Designed for integration with Authentik or other SCIM-compatible identity providers.
+# - Provides secure SCIM user creation endpoint protected by a bearer token.
+# - Uses the Mailcow API to create mailboxes with default settings.
+# - Supports containerized deployment via Docker for ease of management.
+#
+# Notes:
+# - Expects environment variables for API keys and configuration.
+# - Intended for internal/private use; authentication required.
+# - All responses follow SCIM 2.0 standards where applicable.
+#
+# License:
+# This application is licensed under the MIT License.
+# See the LICENSE file in the root of this repository for details.
+#
+# Change Log:
+# Version 0.1.0 - 2025-04-27
+#   - Initial creation of SCIM bridge FastAPI application.
+#
+# Version 0.1.1 - 2025-04-28
+#   - Updated documentation and added Portainer deployment instructions.
+#
+#########################################################################################################################################################################
+
+
 from fastapi import FastAPI, Request, Header, HTTPException
 from pydantic import BaseModel
 import httpx
