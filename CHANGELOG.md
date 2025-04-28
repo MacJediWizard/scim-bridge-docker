@@ -44,3 +44,9 @@ All notable changes to this project will be documented in this file.
 - Updated user creation logic to handle Mailcow API's expected mailbox fields.
 
 ---
+
+## [v0.1.4] - 2025-04-28
+
+### Added
+- Added SCIM ServiceProviderConfig endpoint to provide metadata for SCIM integrations.
+- Added SCIM Groups endpoint for group creation (currently returns a mock success response).

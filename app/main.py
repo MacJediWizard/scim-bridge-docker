@@ -41,6 +41,10 @@
 #   - Updated SCIM User creation endpoint to handle mailbox creation with proper parameters.
 #   - Updated user creation logic to handle Mailcow API's expected mailbox fields.
 #
+# Version 0.1.4 - 2025-04-28
+#   - Added SCIM ServiceProviderConfig endpoint to provide metadata for SCIM integrations.
+#   - Added SCIM Groups endpoint for group creation (currently returns a mock success response).
+#
 #########################################################################################################################################################################
 
 
@@ -63,6 +67,10 @@ class SCIMUser(BaseModel):
     userName: str
     name: dict
     emails: list
+    
+class SCIMGroup(BaseModel):
+    displayName: str
+    members: list
 
 # --- Helper to create Mailcow mailbox ---
 async def create_mailcow_mailbox(email: str, display_name: str):
@@ -112,5 +120,30 @@ async def create_user(user: SCIMUser, authorization: str = Header(None)):
 @app.get("/healthz")
 async def healthcheck():
     return {"status": "running"}
+
+# --- SCIM ServiceProviderConfig Endpoint ---
+@app.get("/ServiceProviderConfig")
+async def service_provider_config():
+    return {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
+        "id": "scim-bridge",
+        "documentationUri": "http://example.com/docs",
+        "patch": {"supported": True},
+        "bulk": {"supported": True},
+        "filter": {"supported": True},
+        "changePassword": {"supported": False},
+        "sort": {"supported": True},
+        "etag": {"supported": True},
+    }
+
+# --- SCIM Groups Creation Endpoint ---
+@app.post("/Groups")
+async def create_group(group: SCIMGroup, authorization: str = Header(None)):
+    if authorization != f"Bearer {SCIM_TOKEN}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    # Implement the logic to create a group
+    # For now, returning a mock success response
+    return {"status": "success", "group": group.displayName}
 
 # --- Future: SCIM Group handlers (optional) ---
