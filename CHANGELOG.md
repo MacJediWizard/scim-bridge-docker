@@ -88,3 +88,11 @@ All notable changes to this project will be documented in this file.
 - No-op `PUT`/`PATCH` on Groups to satisfy Authentik sync without errors  
 
 ---
+
+## [v0.1.9] - 2025-04-28
+
+### Fixed
+- Ensured mailbox provisioning on **PUT /Users/{id}** by invoking Mailcow API during full-sync updates  
+- Added error handling for Mailcow API failures (returns HTTP 400 with detail)
+
+---
