@@ -97,4 +97,4 @@ All notable changes to this project will be documented in this file.
 ## [v0.1.11] - 2025-04-28
 ### Added
 - `set_mailcow_custom_attr` helper for updating custom mailbox attributes
-- Wired **PUT /Groups/{id}** and **PATCH /Groups/{id}** to call Mailcow’s `/edit/mailbox/custom-attribute` endpoint during group sync  
+- Wired **PUT /Groups/{id}** and **PATCH /Groups/{id}** to call Mailcow’s `/edit/mailbox/custom-attribute` endpoint during group sync
