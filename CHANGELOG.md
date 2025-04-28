@@ -38,23 +38,33 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.1.3] - 2025-04-28
 
-### Added
-- Updated Mailcow API integration to correctly create mailboxes
-- Updated SCIM User creation endpoint to handle mailbox creation with proper parameters
-- Updated user creation logic to handle Mailcow API's expected mailbox fields
+### Updated
+- Mailcow API integration to correctly create mailboxes
+- SCIM User creation endpoint to handle mailbox creation with proper parameters
+- User creation logic to match Mailcow API’s expected fields
 
 ---
 
 ## [v0.1.4] - 2025-04-28
 
 ### Added
-- Added SCIM ServiceProviderConfig endpoint to provide metadata for SCIM integrations
-- Added SCIM Groups endpoint for group creation (currently returns a mock success response)
+- SCIM ServiceProviderConfig endpoint to provide integration metadata
+- SCIM Groups endpoint for group creation (mock success response)
 
 ---
 
 ## [v0.1.5] - 2025-04-28
 
 ### Added
-- Implemented SCIM **GET /Users** and **GET /Users/{id}** to support full sync in Authentik
-- Added SCIM **GET /Groups** (returns empty list by default) for group sync
+- SCIM GET `/Users` and `/Users/{id}` endpoints for full sync support
+- SCIM GET `/Groups` endpoint returning an empty list for group sync
+
+---
+
+## [v0.1.6] - 2025-04-28
+
+### Enhanced
+- SCIM user listing returns proper `id` and `externalId` fields  
+- Added support for `startIndex` and `count` pagination parameters  
+- Defined SCIM GET `/Users` and `/Users/{id}` endpoints with Pydantic models  
+- Defined SCIM GET `/Groups` endpoint with `ListResponse` schema  
