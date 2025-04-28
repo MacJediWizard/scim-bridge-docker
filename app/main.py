@@ -51,14 +51,12 @@
 #   - Added SCIM GET /Groups returning empty list for group sync.
 #
 # Version 0.1.6 - 2025-04-28
-#   - SCIM POST /Users now returns full SCIM User resource with `id`, `userName`, `name`, `emails`, and `externalId`.
-#   - SCIM POST /Groups now returns full SCIM Group resource with `id`, `displayName`, and `members`.
-#   - Both CREATE endpoints return HTTP 201 per SCIM spec.
+#   - SCIM POST /Users now returns full SCIM User resource and HTTP 201.
+#   - SCIM POST /Groups now returns full SCIM Group resource and HTTP 201.
 #
 # Version 0.1.7 - 2025-04-28
-#   - Re-added SCIM /ServiceProviderConfig endpoint so Authentik no longer 404s.
-#   - Split input (SCIMUserCreate/SCIMGroupCreate) vs. output (SCIMUser/SCIMGroup) models.
-#   - POST /Users and POST /Groups now accept only the minimal payload Authentik sends and return full SCIM resources (HTTP 201).
+#   - Added SCIM PUT /Users/{id} to support Authentik full-sync updates.
+#   - Added SCIM PUT /Groups/{id} and PATCH /Groups/{id} to avoid 404/405 during group sync.
 #
 #########################################################################################################################################################################
 
@@ -69,6 +67,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
 SCIM_TOKEN = os.getenv("SCIM_TOKEN")
 MAILCOW_API_URL = os.getenv("MAILCOW_API_URL")
 MAILCOW_API_KEY = os.getenv("MAILCOW_API_KEY")
@@ -76,17 +75,7 @@ DEFAULT_DOMAIN = os.getenv("DEFAULT_DOMAIN")
 
 app = FastAPI()
 
-# --- Input models for create operations ---
-class SCIMUserCreate(BaseModel):
-    userName: str
-    name: dict
-    emails: list
-    
-class SCIMGroupCreate(BaseModel):
-    displayName: str
-    members: list
-    
-# --- Full SCIM resource models for responses ---
+# --- SCIM Models ---
 class SCIMUser(BaseModel):
     schemas: list
     id: str
@@ -94,28 +83,28 @@ class SCIMUser(BaseModel):
     name: dict
     emails: list
     externalId: str = None
-    
-class SCIMGroup(BaseModel):
-    schemas: list
-    id: str
-    displayName: str
-    members: list
-    
+
 class SCIMListResponse(BaseModel):
     schemas: list
     totalResults: int
     itemsPerPage: int
     startIndex: int
     Resources: list
-    
+
+class SCIMGroup(BaseModel):
+    schemas: list
+    id: str
+    displayName: str
+    members: list
+
 class SCIMGroupListResponse(BaseModel):
     schemas: list
     totalResults: int
     itemsPerPage: int
     startIndex: int
     Resources: list
-    
-# --- Helper to fetch all Mailcow mailboxes ---
+
+# --- Helper to fetch Mailcow mailboxes ---
 async def fetch_mailcow_mailboxes():
     url = f"{MAILCOW_API_URL}get/mailbox/all/{DEFAULT_DOMAIN}"
     headers = {"X-API-Key": MAILCOW_API_KEY}
@@ -124,12 +113,12 @@ async def fetch_mailcow_mailboxes():
     resp.raise_for_status()
     return resp.json()
 
-# --- SCIM: List Users for full sync ---
+# --- SCIM GET /Users (List) ---
 @app.get("/Users", response_model=SCIMListResponse)
 async def list_users(
     startIndex: int = Query(1, alias="startIndex"),
     count: int = Query(100, alias="count"),
-    authorization: str = Header(None),
+    authorization: str = Header(None)
 ):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -143,17 +132,17 @@ async def list_users(
             "userName": username,
             "name": {"formatted": mb.get("name", username)},
             "emails": [{"value": username}],
-            "externalId": username,
+            "externalId": username
         })
     return {
         "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
         "totalResults": len(resources),
         "itemsPerPage": count,
         "startIndex": startIndex,
-        "Resources": resources,
+        "Resources": resources
     }
 
-# --- SCIM: Get single User ---
+# --- SCIM GET /Users/{id} ---
 @app.get("/Users/{user_id}", response_model=SCIMUser)
 async def get_user(user_id: str, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
@@ -167,22 +156,39 @@ async def get_user(user_id: str, authorization: str = Header(None)):
                 "userName": user_id,
                 "name": {"formatted": mb.get("name", user_id)},
                 "emails": [{"value": user_id}],
-                "externalId": user_id,
+                "externalId": user_id
             }
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    
-# --- SCIM: Create User (provision mailbox) ---
-@app.post("/Users", status_code=status.HTTP_201_CREATED, response_model=SCIMUser)
-async def create_user(user: SCIMUserCreate, authorization: str = Header(None)):
+
+# --- SCIM PUT /Users/{id} for full-sync updates ---
+@app.put("/Users/{user_id}", response_model=SCIMUser)
+async def replace_user(user_id: str, user: SCIMUser, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    domain, local = user.userName.split("@")[-1], user.userName.split("@")[0]
+    # no-op replace; just return the same SCIM resource
+    return {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "id": user_id,
+        "userName": user_id,
+        "name": user.name,
+        "emails": user.emails,
+        "externalId": user.externalId or user_id
+    }
+
+# --- SCIM POST /Users ---
+@app.post("/Users", status_code=status.HTTP_201_CREATED, response_model=SCIMUser)
+async def create_user(user: SCIMUser, authorization: str = Header(None)):
+    if authorization != f"Bearer {SCIM_TOKEN}":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    # Provision mailbox in Mailcow
+    domain = user.userName.split("@")[-1]
+    local_part = user.userName.split("@")[0]
     url = f"{MAILCOW_API_URL}add/mailbox"
     headers = {"X-API-Key": MAILCOW_API_KEY}
     data = {
         "active": "1",
         "domain": domain,
-        "local_part": local,
+        "local_part": local_part,
         "name": user.name.get("formatted", user.userName),
         "authsource": "mailcow",
         "password": "TempPass1234!",
@@ -191,27 +197,27 @@ async def create_user(user: SCIMUserCreate, authorization: str = Header(None)):
         "force_pw_update": "1",
         "tls_enforce_in": "1",
         "tls_enforce_out": "1",
-        "tags": ["scim"],
+        "tags": ["scim"]
     }
     async with httpx.AsyncClient() as client:
         resp = await client.post(url, headers=headers, json=data)
     if resp.status_code != 200:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=resp.text)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Mailcow error: {resp.text}")
     return {
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
         "id": user.userName,
         "userName": user.userName,
         "name": user.name,
         "emails": user.emails,
-        "externalId": user.userName,
+        "externalId": user.userName
     }
-    
-# --- SCIM: List Groups (empty) ---
+
+# --- SCIM GET /Groups (List) ---
 @app.get("/Groups", response_model=SCIMGroupListResponse)
 async def list_groups(
     startIndex: int = Query(1, alias="startIndex"),
     count: int = Query(100, alias="count"),
-    authorization: str = Header(None),
+    authorization: str = Header(None)
 ):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
@@ -220,26 +226,49 @@ async def list_groups(
         "totalResults": 0,
         "itemsPerPage": count,
         "startIndex": startIndex,
-        "Resources": [],
+        "Resources": []
     }
 
-# --- SCIM: Create Group (placeholder) ---
+# --- SCIM POST /Groups ---
 @app.post("/Groups", status_code=status.HTTP_201_CREATED, response_model=SCIMGroup)
-async def create_group(group: SCIMGroupCreate, authorization: str = Header(None)):
+async def create_group(group: SCIMGroup, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     return {
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
-        "id": group.displayName,
+        "id": group.id,
         "displayName": group.displayName,
-        "members": group.members,
+        "members": group.members
     }
-    
-# --- SCIM: ServiceProviderConfig (must exist!) ---
-@app.get("/ServiceProviderConfig")
-async def service_provider_config(authorization: str = Header(None)):
+
+# --- SCIM PUT /Groups/{id} ---
+@app.put("/Groups/{group_id}", response_model=SCIMGroup)
+async def replace_group(group_id: str, group: SCIMGroup, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    return {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "id": group_id,
+        "displayName": group.displayName,
+        "members": group.members
+    }
+
+# --- SCIM PATCH /Groups/{id} ---
+@app.patch("/Groups/{group_id}", response_model=SCIMGroup)
+async def update_group(group_id: str, group: SCIMGroup, authorization: str = Header(None)):
+    if authorization != f"Bearer {SCIM_TOKEN}":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    # no-op patch; echo back
+    return {
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+        "id": group_id,
+        "displayName": group.displayName,
+        "members": group.members
+    }
+
+# --- SCIM ServiceProviderConfig ---
+@app.get("/ServiceProviderConfig")
+async def service_provider_config():
     return {
         "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
         "id": "scim-bridge",
@@ -251,8 +280,8 @@ async def service_provider_config(authorization: str = Header(None)):
         "sort": {"supported": True},
         "etag": {"supported": True},
     }
-    
-# --- Healthcheck ---
+
+# --- Health check endpoint ---
 @app.get("/healthz")
 async def healthz():
     return {"status": "running"}
