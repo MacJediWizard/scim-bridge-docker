@@ -23,3 +23,4 @@ All notable changes to this project will be documented in this file.
 - Added full Portainer deployment instructions (`PORTAINER.md`)
 - Added manual environment variable setup notes
 - Improved documentation for Docker stack usage
+- Updated health check endpoint to `/healthz`.

@@ -29,6 +29,7 @@
 #
 # Version 0.1.1 - 2025-04-28
 #   - Updated documentation and added Portainer deployment instructions.
+#   - Updated health check endpoint to /healthz.
 #
 #########################################################################################################################################################################
 
@@ -87,8 +88,8 @@ async def create_user(user: SCIMUser, authorization: str = Header(None)):
     else:
         raise HTTPException(status_code=400, detail=f"Mailcow error: {text}")
 
-# --- Basic health check ---
-@app.get("/")
+# --- Health check endpoint ---
+@app.get("/healthz")
 async def healthcheck():
     return {"status": "running"}
 
