@@ -31,6 +31,11 @@
 #   - Updated documentation and added Portainer deployment instructions.
 #   - Updated health check endpoint to /healthz.
 #
+# Version 0.1.2 - 2025-04-28
+#   - Added curl installation to Dockerfile for health check functionality.
+#   - Updated Dockerfile to install necessary dependencies.
+#   - Updated health check in container to ensure service is running correctly.
+#
 #########################################################################################################################################################################
 
 
