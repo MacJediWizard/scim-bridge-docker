@@ -80,6 +80,10 @@
 #   - Automatically set `groups` custom-attribute on mailboxes when SCIM POST/PUT/PATCH /Groups is invoked.
 #   - Consolidated custom-attribute logic into `update_mailcow_custom_attr`.
 #
+# Version 0.1.13 - 2025-04-28
+#   - **Use `emails[0].value`** as the source of truth for mailbox address in POST/PUT /Users.
+#   - Fall back to `userName@DEFAULT_DOMAIN` if `emails` is empty or malformed.
+#
 #########################################################################################################################################################################
 
 from fastapi import FastAPI, Header, HTTPException, Query, status
@@ -145,7 +149,7 @@ async def fetch_mailcow_mailboxes():
     return resp.json()
 
 async def create_mailcow_mailbox(email: str, display_name: str):
-    domain, local = email.split("@")[-1], email.split("@")[0]
+    domain, local = email.split("@", 1)[1], email.split("@", 1)[0]
     url = f"{MAILCOW_API_URL}add/mailbox"
     headers = {"X-API-Key": MAILCOW_API_KEY}
     data = {
@@ -161,9 +165,6 @@ async def create_mailcow_mailbox(email: str, display_name: str):
     return resp.status_code, resp.text
 
 async def update_mailcow_custom_attr(items: list[str], attribute_name: str, values: list[str]):
-    """
-    Call Mailcow custom-attribute endpoint to set attributes for given mailboxes.
-    """
     url = f"{MAILCOW_API_URL}edit/mailbox/custom-attribute"
     headers = {"X-API-Key": MAILCOW_API_KEY}
     payload = {
@@ -227,7 +228,9 @@ async def replace_user(
 ):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-    code, text = await create_mailcow_mailbox(user_id, user.name.get("formatted", user_id))
+    # pick mailbox from emails[0].value, fallback to user_id@DEFAULT_DOMAIN
+    mailbox = (user.emails and user.emails[0].get("value")) or f"{user_id}@{DEFAULT_DOMAIN}"
+    code, text = await create_mailcow_mailbox(mailbox, user.name.get("formatted", user_id))
     if code not in (200, 409):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Mailcow error: {text}")
     return SCIMUser(
@@ -244,7 +247,8 @@ async def replace_user(
 async def create_user(user: SCIMUserCreate, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-    code, text = await create_mailcow_mailbox(user.userName, user.name.get("formatted", user.userName))
+    mailbox = (user.emails and user.emails[0].get("value")) or user.userName
+    code, text = await create_mailcow_mailbox(mailbox, user.name.get("formatted", mailbox))
     if code != 200:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Mailcow error: {text}")
     return SCIMUser(
@@ -278,7 +282,6 @@ async def list_groups(
 async def create_group(group: SCIMGroupCreate, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-    # Set custom 'groups' attribute on mailboxes
     await update_mailcow_custom_attr(
         items=[m["value"] for m in group.members],
         attribute_name="groups",

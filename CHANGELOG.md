@@ -109,3 +109,11 @@ All notable changes to this project will be documented in this file.
 - Fixed group-sync 422 errors by properly updating mailbox custom attributes.
 
 ---
+
+## [v0.1.13] - 2025-04-28
+
+### Changed
+- **POST & PUT /Users** now derive the mailbox address from `emails[0].value`, falling back to `userName@DEFAULT_DOMAIN` if missing.
+- Ensures that SCIM payload email is used as the source of truth for mailbox provisioning.
+
+---
