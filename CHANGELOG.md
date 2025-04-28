@@ -63,8 +63,11 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.1.6] - 2025-04-28
 
-### Enhanced
-- SCIM user listing returns proper `id` and `externalId` fields  
-- Added support for `startIndex` and `count` pagination parameters  
-- Defined SCIM GET `/Users` and `/Users/{id}` endpoints with Pydantic models  
-- Defined SCIM GET `/Groups` endpoint with `ListResponse` schema  
+### Changed
+- **SCIM POST /Users** now returns a full SCIM User resource including `id`, `userName`, `name`, `emails`, and `externalId`.
+- **SCIM POST /Users** returns HTTP 201 Created per SCIM specification.
+- **SCIM POST /Groups** now returns a full SCIM Group resource including `id`, `displayName`, and `members`.
+- **SCIM POST /Groups** returns HTTP 201 Created.
+- Eliminated 422 errors during Authentik sync by providing valid `id` fields in create responses.
+
+---
