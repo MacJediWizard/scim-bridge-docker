@@ -27,10 +27,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## Version 0.1.2 - 2025-04-28
+## [v0.1.2] - 2025-04-28
 
 ### Added
-
 - Added curl installation to Dockerfile for health check functionality.
 - Updated Dockerfile to install necessary dependencies.
 - Updated health check in container to ensure service is running correctly.
+
+---
+
+## [v0.1.3] - 2025-04-28
+
+### Added
+- Updated Mailcow API integration to correctly create mailboxes.
+- Updated SCIM User creation endpoint to handle mailbox creation with proper parameters.
+- Updated user creation logic to handle Mailcow API's expected mailbox fields.
+
+---

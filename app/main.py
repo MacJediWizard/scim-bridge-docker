@@ -36,6 +36,11 @@
 #   - Updated Dockerfile to install necessary dependencies.
 #   - Updated health check in container to ensure service is running correctly.
 #
+# Version 0.1.3 - 2025-04-28
+#   - Updated Mailcow API integration to correctly create mailboxes.
+#   - Updated SCIM User creation endpoint to handle mailbox creation with proper parameters.
+#   - Updated user creation logic to handle Mailcow API's expected mailbox fields.
+#
 #########################################################################################################################################################################
 
 
@@ -61,20 +66,30 @@ class SCIMUser(BaseModel):
 
 # --- Helper to create Mailcow mailbox ---
 async def create_mailcow_mailbox(email: str, display_name: str):
-    url = f"{MAILCOW_API_URL}admin/mailbox/add"
-    headers = {"X-API-Key": MAILCOW_API_KEY}
     domain = email.split('@')[-1]
+    local_part = email.split('@')[0]
+    
+    url = f"{MAILCOW_API_URL}add/mailbox"
+    headers = {"X-API-Key": MAILCOW_API_KEY}
+    
     data = {
+        "active": "1",
         "domain": domain,
-        "local_part": email.split('@')[0],
+        "local_part": local_part,
         "name": display_name,
-        "password": "TempPass1234!",  # (or randomize if you want later)
+        "authsource": "mailcow",  # Default auth source in Mailcow
+        "password": "TempPass1234!",  # Default password, can be randomized
         "password2": "TempPass1234!",
-        "active": 1,
-        "force_pw_update": 1
+        "quota": "3072",  # Adjust the quota as needed
+        "force_pw_update": "1",
+        "tls_enforce_in": "1",
+        "tls_enforce_out": "1",
+        "tags": ["scim"]  # You can customize tags as needed
     }
+    
     async with httpx.AsyncClient() as client:
         response = await client.post(url, headers=headers, json=data)
+        
     return response.status_code, response.text
 
 # --- SCIM User creation endpoint ---
