@@ -100,7 +100,12 @@ All notable changes to this project will be documented in this file.
 - POST & PUT /Users now accept minimal payloads.
 - No-op PUT/PATCH on Groups to satisfy Authentik sync.
 
+---
+
 ## [v0.1.12] - 2025-04-28
-### Added
-- `set_mailcow_custom_attr` helper for updating mailbox custom attributes (via `/api/v1/edit/mailbox/custom-attribute`).
-- SCIM Group endpoints (POST, PUT, PATCH) now invoke the custom-attribute API to sync SCIM group assignments into each mailbox’s `groups` attribute.
+### Changed
+- Automatically set `groups` custom-attribute on mailboxes when SCIM **POST**, **PUT**, or **PATCH** `/Groups` is invoked.
+- Consolidated Mailcow custom-attribute logic into new helper `update_mailcow_custom_attr`.
+- Fixed group-sync 422 errors by properly updating mailbox custom attributes.
+
+---
