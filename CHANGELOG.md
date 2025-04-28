@@ -64,8 +64,8 @@ All notable changes to this project will be documented in this file.
 ## [v0.1.6] - 2025-04-28
 
 ### Changed
-- **SCIM POST /Users** now returns a full SCIM User resource (`id`, `userName`, `name`, `emails`, `externalId`) with HTTP 201 Created
-- **SCIM POST /Groups** now returns a full SCIM Group resource (`id`, `displayName`, `members`) with HTTP 201 Created
+- **SCIM POST /Users** now returns a full SCIM User resource (`id`, `userName`, `name`, `emails`, `externalId`) with HTTP 201 Created  
+- **SCIM POST /Groups** now returns a full SCIM Group resource (`id`, `displayName`, `members`) with HTTP 201 Created  
 - Provided valid `id` fields in create responses to eliminate 422 errors during Authentik sync
 
 ---
@@ -73,9 +73,18 @@ All notable changes to this project will be documented in this file.
 ## [v0.1.7] - 2025-04-28
 
 ### Changed
-- Re-added **GET /ServiceProviderConfig** so Authentik SCIM sync no longer 404s
-- Implemented **PUT /Users/{id}** to support Authentik full-sync updates
-- Implemented **PUT /Groups/{id}** and **PATCH /Groups/{id}** to support group updates and avoid 405/404 during sync
+- Re-added **GET /ServiceProviderConfig** so Authentik SCIM sync no longer 404s  
+- Implemented **PUT /Users/{id}** to support Authentik full-sync updates  
+- Implemented **PUT /Groups/{id}** and **PATCH /Groups/{id}** to support group updates and avoid 405/404 during sync  
 - Split request vs. response SCIM models so creation endpoints accept minimal payloads and return full SCIM resources
+
+---
+
+## [v0.1.8] - 2025-04-28
+
+### Changed
+- Split **SCIMUser**/**SCIMGroup** into Create vs. Resource models  
+- `POST /Users` and `PUT /Users/{id}` now accept minimal payloads as sent by Authentik  
+- No-op `PUT`/`PATCH` on Groups to satisfy Authentik sync without errors  
 
 ---
