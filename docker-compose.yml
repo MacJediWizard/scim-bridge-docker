@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  scim-bridge:
+    build: .
+    container_name: scim-bridge
+    ports:
+      - "${API_PORT:-8484}:8484"
+    env_file:
+      - .env
+    restart: unless-stopped
