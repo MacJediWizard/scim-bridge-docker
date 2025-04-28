@@ -14,4 +14,4 @@ docker-compose.override.yml
 .vscode/
 
 # MacOS junk
-.DS_Store
+**.DS_Store
