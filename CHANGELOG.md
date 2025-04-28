@@ -71,3 +71,12 @@ All notable changes to this project will be documented in this file.
 - Eliminated 422 errors during Authentik sync by providing valid `id` fields in create responses.
 
 ---
+
+## [v0.1.7] - 2025-04-28
+
+### Changed
+- Split `SCIMUserCreate`/`SCIMGroupCreate` for input vs. `SCIMUser`/`SCIMGroup` for output.
+- `POST /Users` and `POST /Groups` now accept only the fields Authentik sends and return full SCIM resources with HTTP 201.
+- Ensured `/ServiceProviderConfig` is properly registered and protected.
+
+---
