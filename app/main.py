@@ -12,7 +12,7 @@
 # - This FastAPI application serves as a SCIM 2.0 bridge for provisioning Mailcow mailboxes.
 # - Designed for integration with Authentik or other SCIM-compatible identity providers.
 # - Provides secure SCIM user and group provisioning endpoints protected by a bearer token.
-# - Uses the Mailcow API to create mailboxes with default settings and custom attributes.
+# - Uses the Mailcow API to create mailboxes with default settings.
 # - Supports containerized deployment via Docker for ease of management.
 #
 # Notes:
@@ -60,35 +60,39 @@
 #
 # Version 0.1.8 - 2025-04-28
 #   - Split SCIMUser/SCIMGroup into Create vs Resource models.
-#   - POST /Users and PUT /Users/{id} now accept minimal payloads.
-#   - No-op PUT/PATCH on Groups to satisfy Authentik sync.
+#   - `POST /Users` and `PUT /Users/{id}` now accept minimal payloads.
+#   - No-op `PUT`/`PATCH` on Groups to satisfy Authentik sync.
 #
 # Version 0.1.9 - 2025-04-28
-#   - Ensured mailbox provisioning on PUT /Users/{id} by calling Mailcow API.
+#   - Ensured mailbox provisioning on **PUT /Users/{id}** by calling Mailcow API.
 #   - Added error handling for Mailcow API failures during full-sync updates.
 #
 # Version 0.1.10 - 2025-04-28
-#   - Split SCIMUser/SCIMGroup into Create vs Resource models.
 #   - POST & PUT /Users now accept minimal payloads and provision mailboxes.
 #   - Error on Mailcow failure is surfaced as HTTP 400.
 #
 # Version 0.1.11 - 2025-04-28
-#   - Added set_mailcow_custom_attr helper for updating custom mailbox attributes.
-#   - Wired PATCH /Groups/{id} (and PUT) to call Mailcow's custom-attribute API for group sync.
+#   - Split SCIMUser/SCIMGroup into Create vs Resource models.
+#   - POST & PUT /Users now accept minimal payloads.
+#   - No-op PUT/PATCH on Groups to satisfy Authentik sync.
+#
+# Version 0.1.12 - 2025-04-28
+#   - Added `set_mailcow_custom_attr` helper to update mailbox “groups” custom attribute.
+#   - SCIM Group endpoints (POST, PUT, PATCH) now call Mailcow’s custom-attribute API to synchronize group membership on each mailbox.
+#
 #########################################################################################################################################################################
 
 from fastapi import FastAPI, Header, HTTPException, Query, status
 from pydantic import BaseModel
-import httpx
-import os
+import httpx, os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SCIM_TOKEN     = os.getenv("SCIM_TOKEN")
-MAILCOW_API_URL= os.getenv("MAILCOW_API_URL")
-MAILCOW_API_KEY= os.getenv("MAILCOW_API_KEY")
-DEFAULT_DOMAIN = os.getenv("DEFAULT_DOMAIN")
+SCIM_TOKEN      = os.getenv("SCIM_TOKEN")
+MAILCOW_API_URL = os.getenv("MAILCOW_API_URL")
+MAILCOW_API_KEY = os.getenv("MAILCOW_API_KEY")
+DEFAULT_DOMAIN  = os.getenv("DEFAULT_DOMAIN")
 
 app = FastAPI()
 
@@ -101,7 +105,7 @@ class SCIMUserCreate(BaseModel):
 class SCIMGroupCreate(BaseModel):
     displayName: str
     members: list = []
-    
+
 # --- SCIM output models (full) ---
 class SCIMUser(BaseModel):
     schemas: list
@@ -110,32 +114,33 @@ class SCIMUser(BaseModel):
     name: dict
     emails: list
     externalId: str = None
-    
+
 class SCIMListResponse(BaseModel):
     schemas: list
     totalResults: int
     itemsPerPage: int
     startIndex: int
     Resources: list
-    
+
 class SCIMGroup(BaseModel):
     schemas: list
     id: str
     displayName: str
     members: list
-    
+
 class SCIMGroupListResponse(BaseModel):
     schemas: list
     totalResults: int
     itemsPerPage: int
     startIndex: int
     Resources: list
-    
+
 # --- Mailcow helpers ---
 async def fetch_mailcow_mailboxes():
     url = f"{MAILCOW_API_URL}get/mailbox/all/{DEFAULT_DOMAIN}"
+    headers = {"X-API-Key": MAILCOW_API_KEY}
     async with httpx.AsyncClient() as c:
-        r = await c.get(url, headers={"X-API-Key": MAILCOW_API_KEY})
+        r = await c.get(url, headers=headers)
     r.raise_for_status()
     return r.json()
 
@@ -154,45 +159,49 @@ async def create_mailcow_mailbox(email: str, display_name: str):
         r = await c.post(url, headers={"X-API-Key": MAILCOW_API_KEY}, json=data)
     return r.status_code, r.text
 
-async def set_mailcow_custom_attr(emails: list[str], attr: str, values: list[str]):
-    """
-    Update custom attributes for one or more Mailcow mailboxes.
-    """
+async def set_mailcow_custom_attr(group_name: str, mailboxes: list[str]):
     url = f"{MAILCOW_API_URL}edit/mailbox/custom-attribute"
-    payload = {"attr": {"attribute": [attr], "value": values}, "items": emails}
+    body = {
+        "attr": {
+            "attribute": ["groups"],
+            "value": [group_name]
+        },
+        "items": mailboxes
+    }
     async with httpx.AsyncClient() as c:
-        r = await c.post(url, headers={"X-API-Key": MAILCOW_API_KEY}, json=payload)
-    r.raise_for_status()
-    return r.json()
+        r = await c.post(url, headers={"X-API-Key": MAILCOW_API_KEY}, json=body)
+    if r.status_code != 200:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Custom-attribute error: {r.text}")
 
 # --- SCIM GET /Users ---
 @app.get("/Users", response_model=SCIMListResponse)
 async def list_users(
-    startIndex:int=Query(1,alias="startIndex"), count:int=Query(100,alias="count"),
-    authorization:str=Header(None)
+    startIndex: int = Query(1, alias="startIndex"),
+    count: int = Query(100, alias="count"),
+    authorization: str = Header(None)
 ):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
     boxes = await fetch_mailcow_mailboxes()
     res = [{
-        "schemas":["urn:ietf:params:scim:schemas:core:2.0:User"],
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
         "id": mb["username"],
         "userName": mb["username"],
-        "name":{"formatted": mb.get("name", mb["username"])},
-        "emails":[{"value": mb["username"]}],
+        "name": {"formatted": mb.get("name", mb["username"])},
+        "emails": [{"value": mb["username"]}],
         "externalId": mb["username"]
     } for mb in boxes]
     return {
-        "schemas":["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-        "totalResults":len(res),
-        "itemsPerPage":count,
-        "startIndex":startIndex,
-        "Resources":res
+        "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+        "totalResults": len(res),
+        "itemsPerPage": count,
+        "startIndex": startIndex,
+        "Resources": res
     }
 
 # --- SCIM GET /Users/{id} ---
 @app.get("/Users/{user_id}", response_model=SCIMUser)
-async def get_user(user_id:str, authorization:str=Header(None)):
+async def get_user(user_id: str, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
     for mb in await fetch_mailcow_mailboxes():
@@ -201,23 +210,23 @@ async def get_user(user_id:str, authorization:str=Header(None)):
                 schemas=["urn:ietf:params:scim:schemas:core:2.0:User"],
                 id=user_id,
                 userName=user_id,
-                name={"formatted":mb.get("name",user_id)},
-                emails=[{"value":user_id}],
+                name={"formatted": mb.get("name", user_id)},
+                emails=[{"value": user_id}],
                 externalId=user_id
             )
     raise HTTPException(status.HTTP_404_NOT_FOUND)
 
-# --- SCIM PUT /Users/{id} (full‐sync create/update) ---
+# --- SCIM PUT /Users/{id} (full-sync create/update) ---
 @app.put("/Users/{user_id}", response_model=SCIMUser)
 async def replace_user(
-    user_id:str,
-    user:SCIMUserCreate,
-    authorization:str=Header(None)
+    user_id: str,
+    user: SCIMUserCreate,
+    authorization: str = Header(None)
 ):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-    code, text = await create_mailcow_mailbox(user_id, user.name.get("formatted",user_id))
-    if code not in (200,409):
+    code, text = await create_mailcow_mailbox(user_id, user.name.get("formatted", user_id))
+    if code not in (200, 409):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Mailcow error: {text}")
     return SCIMUser(
         schemas=["urn:ietf:params:scim:schemas:core:2.0:User"],
@@ -230,10 +239,10 @@ async def replace_user(
 
 # --- SCIM POST /Users ---
 @app.post("/Users", status_code=status.HTTP_201_CREATED, response_model=SCIMUser)
-async def create_user(user:SCIMUserCreate, authorization:str=Header(None)):
+async def create_user(user: SCIMUserCreate, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-    code, text = await create_mailcow_mailbox(user.userName, user.name.get("formatted",user.userName))
+    code, text = await create_mailcow_mailbox(user.userName, user.name.get("formatted", user.userName))
     if code != 200:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Mailcow error: {text}")
     return SCIMUser(
@@ -244,78 +253,100 @@ async def create_user(user:SCIMUserCreate, authorization:str=Header(None)):
         emails=user.emails,
         externalId=user.userName
     )
-    
+
 # --- SCIM GET /Groups ---
 @app.get("/Groups", response_model=SCIMGroupListResponse)
 async def list_groups(
-    startIndex:int=Query(1,alias="startIndex"), count:int=Query(100,alias="count"),
-    authorization:str=Header(None)
+    startIndex: int = Query(1, alias="startIndex"),
+    count: int = Query(100, alias="count"),
+    authorization: str = Header(None)
 ):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
     return {
-        "schemas":["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-        "totalResults":0,"itemsPerPage":count,"startIndex":startIndex,"Resources":[]
+        "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+        "totalResults": 0,
+        "itemsPerPage": count,
+        "startIndex": startIndex,
+        "Resources": []
     }
 
 # --- SCIM POST /Groups ---
 @app.post("/Groups", status_code=status.HTTP_201_CREATED, response_model=SCIMGroup)
-async def create_group(group:SCIMGroupCreate, authorization:str=Header(None)):
+async def create_group(group: SCIMGroupCreate, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+    # update custom attribute on all member mailboxes
+    members = [
+        m.get("value") if isinstance(m, dict) else m
+        for m in group.members
+    ]
+    await set_mailcow_custom_attr(group.displayName, members)
     return SCIMGroup(
         schemas=["urn:ietf:params:scim:schemas:core:2.0:Group"],
         id=group.displayName,
         displayName=group.displayName,
         members=group.members
     )
-    
+
 # --- SCIM PUT /Groups/{id} ---
 @app.put("/Groups/{group_id}", response_model=SCIMGroup)
-async def replace_group(group_id:str, group:SCIMGroupCreate, authorization:str=Header(None)):
+async def replace_group(
+    group_id: str,
+    group: SCIMGroupCreate,
+    authorization: str = Header(None)
+):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-    # apply custom attribute for group sync
-    emails = [m['value'] for m in group.members]
-    await set_mailcow_custom_attr(emails, 'groups', [group.displayName])
+    members = [
+        m.get("value") if isinstance(m, dict) else m
+        for m in group.members
+    ]
+    await set_mailcow_custom_attr(group_id, members)
     return SCIMGroup(
         schemas=["urn:ietf:params:scim:schemas:core:2.0:Group"],
         id=group_id,
         displayName=group.displayName,
         members=group.members
     )
-    
+
 # --- SCIM PATCH /Groups/{id} ---
 @app.patch("/Groups/{group_id}", response_model=SCIMGroup)
-async def update_group(group_id:str, group:SCIMGroupCreate, authorization:str=Header(None)):
+async def update_group(
+    group_id: str,
+    group: SCIMGroupCreate,
+    authorization: str = Header(None)
+):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-    # apply custom attribute for group sync
-    emails = [m['value'] for m in group.members]
-    await set_mailcow_custom_attr(emails, 'groups', [group.displayName])
+    members = [
+        m.get("value") if isinstance(m, dict) else m
+        for m in group.members
+    ]
+    await set_mailcow_custom_attr(group_id, members)
     return SCIMGroup(
         schemas=["urn:ietf:params:scim:schemas:core:2.0:Group"],
         id=group_id,
         displayName=group.displayName,
         members=group.members
     )
-    
+
 # --- SCIM ServiceProviderConfig ---
 @app.get("/ServiceProviderConfig")
 async def service_provider_config():
     return {
-        "schemas":["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
-        "id":"scim-bridge",
-        "documentationUri":"http://example.com/docs",
-        "patch":{"supported":True},
-        "bulk":{"supported":True},
-        "filter":{"supported":True},
-        "changePassword":{"supported":False},
-        "sort":{"supported":True},
-        "etag":{"supported":True},
+        "schemas": ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
+        "id": "scim-bridge",
+        "documentationUri": "http://example.com/docs",
+        "patch": {"supported": True},
+        "bulk": {"supported": True},
+        "filter": {"supported": True},
+        "changePassword": {"supported": False},
+        "sort": {"supported": True},
+        "etag": {"supported": True},
     }
-    
-# --- Health check ---
+
+# --- Health check endpoint ---
 @app.get("/healthz")
 async def healthz():
-    return {"status":"running"}
+    return {"status": "running"}
