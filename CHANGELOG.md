@@ -75,8 +75,8 @@ All notable changes to this project will be documented in this file.
 ## [v0.1.7] - 2025-04-28
 
 ### Changed
-- Split `SCIMUserCreate`/`SCIMGroupCreate` for input vs. `SCIMUser`/`SCIMGroup` for output.
-- `POST /Users` and `POST /Groups` now accept only the fields Authentik sends and return full SCIM resources with HTTP 201.
-- Ensured `/ServiceProviderConfig` is properly registered and protected.
+- Re-added `/ServiceProviderConfig` endpoint so Authentik SCIM sync no longer 404s.
+- Split models: `SCIMUserCreate`/`SCIMGroupCreate` for incoming payloads and `SCIMUser`/`SCIMGroup` for outgoing resources.
+- `POST /Users` and `POST /Groups` now accept the minimal JSON Authentik sends, provision remote resources, and return full SCIM objects with HTTP 201.
 
 ---

@@ -56,15 +56,16 @@
 #   - Both CREATE endpoints return HTTP 201 per SCIM spec.
 #
 # Version 0.1.7 - 2025-04-28
-#   - Split input and output models so POST /Users and /Groups accept only the fields Authentik sends.
-#   - Create endpoints now return full SCIM resources (with `schemas`, `id`, etc.) and HTTP 201.
-#   - Fixed registration of /ServiceProviderConfig so it actually responds.
+#   - Re-added SCIM /ServiceProviderConfig endpoint so Authentik no longer 404s.
+#   - Split input (SCIMUserCreate/SCIMGroupCreate) vs. output (SCIMUser/SCIMGroup) models.
+#   - POST /Users and POST /Groups now accept only the minimal payload Authentik sends and return full SCIM resources (HTTP 201).
 #
-#########################################################################################################
+#########################################################################################################################################################################
 
 from fastapi import FastAPI, Header, HTTPException, Query, status
 from pydantic import BaseModel
-import httpx, os
+import httpx
+import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -75,7 +76,7 @@ DEFAULT_DOMAIN = os.getenv("DEFAULT_DOMAIN")
 
 app = FastAPI()
 
-# --- Input models (what Authentik sends) ---
+# --- Input models for create operations ---
 class SCIMUserCreate(BaseModel):
     userName: str
     name: dict
@@ -114,7 +115,7 @@ class SCIMGroupListResponse(BaseModel):
     startIndex: int
     Resources: list
     
-# --- Helpers ---
+# --- Helper to fetch all Mailcow mailboxes ---
 async def fetch_mailcow_mailboxes():
     url = f"{MAILCOW_API_URL}get/mailbox/all/{DEFAULT_DOMAIN}"
     headers = {"X-API-Key": MAILCOW_API_KEY}
@@ -123,7 +124,7 @@ async def fetch_mailcow_mailboxes():
     resp.raise_for_status()
     return resp.json()
 
-# --- List users (full sync) ---
+# --- SCIM: List Users for full sync ---
 @app.get("/Users", response_model=SCIMListResponse)
 async def list_users(
     startIndex: int = Query(1, alias="startIndex"),
@@ -152,7 +153,7 @@ async def list_users(
         "Resources": resources,
     }
 
-# --- Get single user ---
+# --- SCIM: Get single User ---
 @app.get("/Users/{user_id}", response_model=SCIMUser)
 async def get_user(user_id: str, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
@@ -170,22 +171,26 @@ async def get_user(user_id: str, authorization: str = Header(None)):
             }
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     
-# --- Create user (provision mailbox) ---
+# --- SCIM: Create User (provision mailbox) ---
 @app.post("/Users", status_code=status.HTTP_201_CREATED, response_model=SCIMUser)
 async def create_user(user: SCIMUserCreate, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
-    # provision in Mailcow
     domain, local = user.userName.split("@")[-1], user.userName.split("@")[0]
     url = f"{MAILCOW_API_URL}add/mailbox"
     headers = {"X-API-Key": MAILCOW_API_KEY}
     data = {
-        "active": "1", "domain": domain, "local_part": local,
+        "active": "1",
+        "domain": domain,
+        "local_part": local,
         "name": user.name.get("formatted", user.userName),
         "authsource": "mailcow",
-        "password": "TempPass1234!", "password2": "TempPass1234!",
-        "quota": "3072", "force_pw_update": "1",
-        "tls_enforce_in": "1", "tls_enforce_out": "1",
+        "password": "TempPass1234!",
+        "password2": "TempPass1234!",
+        "quota": "3072",
+        "force_pw_update": "1",
+        "tls_enforce_in": "1",
+        "tls_enforce_out": "1",
         "tags": ["scim"],
     }
     async with httpx.AsyncClient() as client:
@@ -201,7 +206,7 @@ async def create_user(user: SCIMUserCreate, authorization: str = Header(None)):
         "externalId": user.userName,
     }
     
-# --- List groups ---
+# --- SCIM: List Groups (empty) ---
 @app.get("/Groups", response_model=SCIMGroupListResponse)
 async def list_groups(
     startIndex: int = Query(1, alias="startIndex"),
@@ -218,7 +223,7 @@ async def list_groups(
         "Resources": [],
     }
 
-# --- Create group placeholder ---
+# --- SCIM: Create Group (placeholder) ---
 @app.post("/Groups", status_code=status.HTTP_201_CREATED, response_model=SCIMGroup)
 async def create_group(group: SCIMGroupCreate, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
@@ -230,7 +235,7 @@ async def create_group(group: SCIMGroupCreate, authorization: str = Header(None)
         "members": group.members,
     }
     
-# --- ServiceProviderConfig (must exist!) ---
+# --- SCIM: ServiceProviderConfig (must exist!) ---
 @app.get("/ServiceProviderConfig")
 async def service_provider_config(authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
