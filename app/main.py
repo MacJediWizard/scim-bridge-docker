@@ -45,13 +45,15 @@
 #   - Added SCIM ServiceProviderConfig endpoint to provide metadata for SCIM integrations.
 #   - Added SCIM Groups endpoint for group creation (currently returns a mock success response).
 #
+# Version 0.1.5 - 2025-04-28
+#   - Implemented SCIM GET /Users and GET /Users/{id} for full sync support.
+#   - Added SCIM GET /Groups for full sync (returns empty list by default).
+#
 #########################################################################################################################################################################
 
-
-from fastapi import FastAPI, Request, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
-import httpx
-import os
+import httpx, os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -59,6 +61,7 @@ load_dotenv()
 SCIM_TOKEN = os.getenv("SCIM_TOKEN")
 MAILCOW_API_URL = os.getenv("MAILCOW_API_URL")
 MAILCOW_API_KEY = os.getenv("MAILCOW_API_KEY")
+DEFAULT_DOMAIN = os.getenv("DEFAULT_DOMAIN")
 
 app = FastAPI()
 
@@ -71,57 +74,85 @@ class SCIMUser(BaseModel):
 class SCIMGroup(BaseModel):
     displayName: str
     members: list
-
+    
 # --- Helper to create Mailcow mailbox ---
 async def create_mailcow_mailbox(email: str, display_name: str):
     domain = email.split('@')[-1]
     local_part = email.split('@')[0]
-    
     url = f"{MAILCOW_API_URL}add/mailbox"
     headers = {"X-API-Key": MAILCOW_API_KEY}
-    
     data = {
         "active": "1",
         "domain": domain,
         "local_part": local_part,
         "name": display_name,
-        "authsource": "mailcow",  # Default auth source in Mailcow
-        "password": "TempPass1234!",  # Default password, can be randomized
+        "authsource": "mailcow",
+        "password": "TempPass1234!",
         "password2": "TempPass1234!",
-        "quota": "3072",  # Adjust the quota as needed
+        "quota": "3072",
         "force_pw_update": "1",
         "tls_enforce_in": "1",
         "tls_enforce_out": "1",
-        "tags": ["scim"]  # You can customize tags as needed
+        "tags": ["scim"]
     }
-    
     async with httpx.AsyncClient() as client:
-        response = await client.post(url, headers=headers, json=data)
-        
-    return response.status_code, response.text
+        resp = await client.post(url, headers=headers, json=data)
+    return resp.status_code, resp.text
 
 # --- SCIM User creation endpoint ---
 @app.post("/Users")
 async def create_user(user: SCIMUser, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status_code=401, detail="Unauthorized")
-
-    email = user.userName
-    display_name = user.name.get("formatted", email)
-
-    status, text = await create_mailcow_mailbox(email, display_name)
-
+    status, text = await create_mailcow_mailbox(user.userName, user.name.get("formatted", user.userName))
     if status == 200:
-        return {"status": "success", "email": email}
-    else:
-        raise HTTPException(status_code=400, detail=f"Mailcow error: {text}")
-
-# --- Health check endpoint ---
+        return {"status": "success", "email": user.userName}
+    raise HTTPException(status_code=400, detail=f"Mailcow error: {text}")
+    
+# --- SCIM list users for full sync ---
+@app.get("/Users")
+async def list_users(authorization: str = Header(None)):
+    if authorization != f"Bearer {SCIM_TOKEN}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"{MAILCOW_API_URL}get/mailbox/all/{DEFAULT_DOMAIN}", headers={"X-API-Key": MAILCOW_API_KEY})
+    mailboxes = resp.json()
+    resources = []
+    for m in mailboxes:
+        resources.append({
+            "id": m["username"],
+            "userName": m["username"],
+            "name": {"formatted": m.get("name", m["username"])},
+            "emails": [{"value": m["username"]}]
+        })
+    return {
+        "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+        "totalResults": len(resources),
+        "startIndex": 1,
+        "itemsPerPage": len(resources),
+        "Resources": resources
+    }
+    
+# --- SCIM get single user ---
+@app.get("/Users/{user_id}")
+async def get_user(user_id: str, authorization: str = Header(None)):
+    if authorization != f"Bearer {SCIM_TOKEN}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    resp = await httpx.AsyncClient().get(f"{MAILCOW_API_URL}get/mailbox/{user_id}", headers={"X-API-Key": MAILCOW_API_KEY})
+    m = resp.json()[0]
+    return {
+        "id": m["username"],
+        "userName": m["username"],
+        "name": {"formatted": m.get("name", m["username"])},
+        "emails": [{"value": m["username"]}]
+    }
+    
+# --- Health check ---
 @app.get("/healthz")
 async def healthcheck():
     return {"status": "running"}
 
-# --- SCIM ServiceProviderConfig Endpoint ---
+# --- SCIM ServiceProviderConfig ---
 @app.get("/ServiceProviderConfig")
 async def service_provider_config():
     return {
@@ -135,15 +166,23 @@ async def service_provider_config():
         "sort": {"supported": True},
         "etag": {"supported": True},
     }
-
-# --- SCIM Groups Creation Endpoint ---
+    
+# --- SCIM Groups endpoint (empty list) ---
+@app.get("/Groups")
+async def list_groups(authorization: str = Header(None)):
+    if authorization != f"Bearer {SCIM_TOKEN}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {
+        "schemas": ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+        "totalResults": 0,
+        "startIndex": 1,
+        "itemsPerPage": 0,
+        "Resources": []
+    }
+    
+# --- SCIM placeholder group create ---
 @app.post("/Groups")
 async def create_group(group: SCIMGroup, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status_code=401, detail="Unauthorized")
-        
-    # Implement the logic to create a group
-    # For now, returning a mock success response
     return {"status": "success", "group": group.displayName}
-
-# --- Future: SCIM Group handlers (optional) ---

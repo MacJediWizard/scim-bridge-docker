@@ -23,30 +23,38 @@ All notable changes to this project will be documented in this file.
 - Added full Portainer deployment instructions (`PORTAINER.md`)
 - Added manual environment variable setup notes
 - Improved documentation for Docker stack usage
-- Updated health check endpoint to `/healthz`.
+- Updated health check endpoint to `/healthz`
 
 ---
 
 ## [v0.1.2] - 2025-04-28
 
 ### Added
-- Added curl installation to Dockerfile for health check functionality.
-- Updated Dockerfile to install necessary dependencies.
-- Updated health check in container to ensure service is running correctly.
+- Added curl installation to Dockerfile for health check functionality
+- Updated Dockerfile to install necessary dependencies
+- Updated health check in container to ensure service is running correctly
 
 ---
 
 ## [v0.1.3] - 2025-04-28
 
 ### Added
-- Updated Mailcow API integration to correctly create mailboxes.
-- Updated SCIM User creation endpoint to handle mailbox creation with proper parameters.
-- Updated user creation logic to handle Mailcow API's expected mailbox fields.
+- Updated Mailcow API integration to correctly create mailboxes
+- Updated SCIM User creation endpoint to handle mailbox creation with proper parameters
+- Updated user creation logic to handle Mailcow API's expected mailbox fields
 
 ---
 
 ## [v0.1.4] - 2025-04-28
 
 ### Added
-- Added SCIM ServiceProviderConfig endpoint to provide metadata for SCIM integrations.
-- Added SCIM Groups endpoint for group creation (currently returns a mock success response).
+- Added SCIM ServiceProviderConfig endpoint to provide metadata for SCIM integrations
+- Added SCIM Groups endpoint for group creation (currently returns a mock success response)
+
+---
+
+## [v0.1.5] - 2025-04-28
+
+### Added
+- Implemented SCIM **GET /Users** and **GET /Users/{id}** to support full sync in Authentik
+- Added SCIM **GET /Groups** (returns empty list by default) for group sync
