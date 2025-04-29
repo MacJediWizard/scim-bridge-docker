@@ -1,11 +1,31 @@
-version: "3.8"
+version: "3.9"
 
 services:
   scim-bridge:
-    build: .
-    container_name: scim-bridge
-    ports:
-      - "${API_PORT:-8484}:8484"
-    env_file:
-      - .env
+    image: scim-bridge-docker:latest
+    container_name: scim-bridge-docker
     restart: unless-stopped
+
+    environment:
+      - SCIM_TOKEN=${SCIM_TOKEN}
+      - MAILCOW_API_URL=${MAILCOW_API_URL}
+      - MAILCOW_API_KEY=${MAILCOW_API_KEY}
+      - DEFAULT_DOMAIN=${DEFAULT_DOMAIN}
+      - DEFAULT_DOMAIN_ADMIN_PASSWORD=${DEFAULT_DOMAIN_ADMIN_PASSWORD}
+      - DOMAIN_ADMIN_GROUP_NAME=${DOMAIN_ADMIN_GROUP_NAME}
+
+    ports:
+      - "8484:8484"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8484/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+    networks:
+      - scim-bridge-docker-network
+
+networks:
+  scim-bridge-docker-network:
+    driver: bridge

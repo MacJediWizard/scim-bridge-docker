@@ -1,14 +1,15 @@
 # Deploying SCIM Bridge in Portainer
 
-This guide explains how to deploy the SCIM Bridge Docker container into Portainer easily.
+This guide explains how to deploy the SCIM Bridge Docker container into Portainer.
 
 ---
 
 ## Prerequisites
 
-- Working Portainer installation (tested with CE 2.x and Business Edition)
+- A working Portainer instance (tested with CE 2.x / Business Edition)
+- Docker Engine installed on the target node
 - Access to the SCIM Bridge Docker image
-- Your `.env` file ready (or environment variables prepared)
+- Your `.env` file ready (or environment variables filled manually)
 
 ---
 
@@ -16,8 +17,8 @@ This guide explains how to deploy the SCIM Bridge Docker container into Portaine
 
 ### 1. Create a New Stack
 
-- In Portainer, navigate to **Stacks**.
-- Click **Add Stack**.
+- In Portainer, go to **Stacks**
+- Click **Add Stack**
 - Name it something like:  
   `scim-bridge-docker`
 
@@ -25,7 +26,7 @@ This guide explains how to deploy the SCIM Bridge Docker container into Portaine
 
 ### 2. Docker Compose YAML
 
-Paste the following minimal `docker-compose.yml`:
+Paste this `docker-compose.yml` in the editor:
 
 ```yaml
 version: "3.9"
@@ -42,29 +43,31 @@ services:
 ```
 
 **Important:**  
-Make sure the `.env` file is available to Portainer, or manually fill in environment variables.
+Make sure your `.env` file is uploaded and available to Portainer, or manually input the variables in the UI.
 
 ---
 
-### 3. Environment Variables (Alternative Method)
+### 3. Environment Variables (Manual Alternative)
 
-If you don't use `.env`, manually add these variables in Portainer UI:
+If you choose **not to use `.env`**, add the following manually in Portainer:
 
-| Variable        | Example Value |
-|:----------------|:--------------|
-| `SCIM_TOKEN`    | yourlongsecuretoken |
-| `MAILCOW_API_URL` | https://mail.example.com/api/v1/ |
-| `MAILCOW_API_KEY` | your-mailcow-api-key |
-| `DEFAULT_DOMAIN` | example.com |
-| `API_PORT`      | 8484 |
+| Variable                    | Example Value                      |
+|-----------------------------|------------------------------------|
+| `SCIM_TOKEN`                | your-secure-token                  |
+| `MAILCOW_API_URL`           | https://mail.example.com/api/v1/   |
+| `MAILCOW_API_KEY`           | your-mailcow-api-key               |
+| `DEFAULT_DOMAIN`            | example.com                        |
+| `API_PORT`                  | 8484                               |
+| `DEFAULT_DOMAIN_ADMIN_PASSWORD` | TempPass1234!                 |
+| `DOMAIN_ADMIN_GROUP_NAME`   | Mailcow Domain Admins              |
 
 ---
 
 ### 4. Deploy the Stack
 
-- Click **Deploy the stack**.
-- Wait until the container is up.
-- Navigate to `http://your-server:8484/healthz` to verify the healthcheck.
+- Click **Deploy the stack**
+- Wait for the container to become healthy
+- Visit: `http://your-server:8484/healthz`
 
 You should see:
 
@@ -74,12 +77,29 @@ You should see:
 
 ---
 
+### 5. Prometheus Monitoring (Optional)
+
+You can configure Prometheus to scrape metrics from:
+
+```
+http://your-server:8484/metrics
+```
+
+This exposes metrics like:
+
+- `users_synced_total`
+- `groups_synced_total`
+- `domain_admins_created_total`
+- `domain_admins_deleted_total`
+
+---
+
 ## Notes
 
-- Make sure Port 8484 is **open** on your firewall if external SCIM traffic is needed.
-- Keep your SCIM Token **secret**.
-- You can restrict access to trusted IPs via your reverse proxy if needed.
-- Enable HTTPS termination in your proxy/load balancer if needed (recommended for production).
+- Ensure port `8484` is open in your firewall for SCIM/Prometheus access.
+- Use a reverse proxy (e.g. Nginx, Traefik) for HTTPS termination in production.
+- Protect the `/metrics` endpoint behind basic auth or firewall if needed.
+- Keep your API token and Mailcow credentials secure!
 
 ---
 

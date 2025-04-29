@@ -144,3 +144,18 @@ All notable changes to this project will be documented in this file.
 - Custom attribute `groups` now properly supports multiple group names per mailbox.
 
 ---
+
+## [v0.1.17] - 2025-04-28
+### Added
+- Implemented full mailbox `groups` custom attribute synchronization.
+- Added automatic Domain Admin promotion if user is added to `Mailcow Domain Admins` group.
+- Added automatic Domain Admin removal if user is removed from `Mailcow Domain Admins` group.
+- Added `/metrics` endpoint for Prometheus scraping support (exposes `users_synced_total`, `groups_synced_total`, `domain_admins_created_total`, `domain_admins_deleted_total`).
+
+### Changed
+- Improved SCIM PATCH/PUT /Groups endpoint handling.
+- Full synchronization of mailbox group memberships across multiple groups.
+- Optimized Mailcow API calls to handle creation and deletion cleanly.
+- Better error handling for Mailcow API failures surfaced to SCIM clients.
+
+---

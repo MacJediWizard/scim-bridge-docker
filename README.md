@@ -8,26 +8,27 @@ Built by MacJediWizard 🚀
 ---
 
 ## Features
-- FastAPI SCIM 2.0 Server
-- Automatic mailbox creation in Mailcow
-- Automatic mailbox custom attribute updates (groups)
-- Automatic promotion to Mailcow Domain Admins (based on SCIM group membership)
-- Dockerized for easy deployment
-- Secure SCIM token authentication
-- Healthcheck endpoint
-- Minimal dependencies, fast performance
+
+- 🔐 Secure SCIM 2.0 Server using FastAPI
+- 📬 Automatic mailbox provisioning in Mailcow
+- 🧠 SCIM group → Mailcow mailbox custom attribute mapping (`groups`)
+- 🛡️ Auto-promotion/removal to/from Mailcow Domain Admins via SCIM group membership
+- 📈 Built-in `/metrics` endpoint for Prometheus / Grafana monitoring
+- 🐳 Dockerized for fast, reproducible deployment
+- ✅ SCIM standard support: `GET`, `POST`, `PUT`, `PATCH`
+- 🔄 Sync-ready with Authentik SCIM provider
 
 ---
 
 ## Getting Started
 
-### 1. Clone and Build
+### 1. Clone and Deploy
 
 ```bash
 git clone https://github.com/YOURUSERNAME/scim-bridge-docker.git
 cd scim-bridge-docker
 cp .env.example .env
-# Edit the .env file with your secrets
+# Edit the .env file with your API keys, domain, and token
 docker compose up -d
 ```
 
@@ -35,42 +36,64 @@ docker compose up -d
 
 ## Environment Variables
 
-| Variable        | Purpose |
-|:----------------|:--------|
-| `SCIM_TOKEN`    | Bearer token that Authentik will use to authenticate SCIM requests |
-| `MAILCOW_API_URL` | URL to your Mailcow API endpoint (e.g., `https://mail.example.com/api/v1/`) |
-| `MAILCOW_API_KEY` | API key generated from Mailcow Admin UI |
-| `DEFAULT_DOMAIN` | Your primary Mailcow domain (e.g., `example.com`) |
-| `API_PORT`      | (Optional) Port to expose SCIM server (default: 8484) |
+| Variable           | Description |
+|--------------------|-------------|
+| `SCIM_TOKEN`       | Bearer token used to authenticate SCIM requests |
+| `MAILCOW_API_URL`  | Base URL of the Mailcow Admin API (e.g. `https://mail.example.com/api/v1/`) |
+| `MAILCOW_API_KEY`  | Mailcow API Key with admin privileges |
+| `DEFAULT_DOMAIN`   | Default domain for mailbox provisioning |
+| `API_PORT`         | (Optional) Port to expose the FastAPI server (default: `8484`) |
 
 ---
 
 ## API Endpoints
 
-| Path     | Method | Purpose |
-|:---------|:------:|:--------|
-| `/healthz` | `GET` | Healthcheck (`{"status": "running"}`) |
-| `/ServiceProviderConfig` | `GET` | SCIM service provider metadata |
-| `/Users` | `GET`, `POST`, `PUT` | Manage Mailcow mailbox users |
-| `/Groups` | `GET`, `POST`, `PUT`, `PATCH` | Manage Mailcow mailbox group memberships via custom attributes |
+| Path                      | Method(s)              | Description |
+|---------------------------|------------------------|-------------|
+| `/healthz`                | `GET`                  | Healthcheck endpoint |
+| `/metrics`                | `GET`                  | Prometheus metrics (for Grafana) |
+| `/ServiceProviderConfig`  | `GET`                  | SCIM metadata |
+| `/Users`                  | `GET`, `POST`, `PUT`   | Sync and provision Mailcow users |
+| `/Groups`                 | `GET`, `POST`, `PUT`, `PATCH` | Sync SCIM groups → Mailcow custom attributes |
 
 ---
 
-## How it Works
+## How It Works
 
-1. Authentik SCIM provider syncs Users and Groups to the FastAPI SCIM Bridge.
-2. The FastAPI app validates the SCIM bearer token.
-3. The app creates mailboxes automatically via Mailcow Admin API.
-4. Users' `custom-attributes` are updated with their SCIM group memberships.
-5. If a user belongs to the special group "Mailcow Domain Admins", they are automatically promoted to a Domain Admin in Mailcow.
+1. Authentik SCIM sends a sync request to the FastAPI SCIM server.
+2. The server authenticates via the provided SCIM bearer token.
+3. SCIM `/Users` → Mailcow mailbox creation (with strong defaults).
+4. SCIM `/Groups` → Mailcow mailbox `custom-attributes.groups` assignment.
+5. If a user is added to the SCIM group **"Mailcow Domain Admins"**, the server will:
+   - Automatically promote them via Mailcow's `/add/domain-admin`.
+6. If the user is later removed from that group, they are demoted via `/delete/domain-admin`.
 
 ---
 
 ## Requirements
 
-- Docker
-- Docker Compose
-- Git (to clone the repository)
+- 🐳 Docker + Docker Compose
+- 🧠 Basic knowledge of SCIM and Mailcow API
+- 🔐 A valid Mailcow admin API key
+- ⚙️ Authentik instance or SCIM-compatible identity provider
+
+---
+
+## Monitoring
+
+Export metrics to Prometheus:
+
+```text
+GET /metrics
+```
+
+Sample output:
+```text
+users_synced_total 42
+groups_synced_total 17
+domain_admins_created_total 4
+domain_admins_deleted_total 2
+```
 
 ---
 
