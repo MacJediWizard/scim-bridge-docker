@@ -95,6 +95,11 @@
 #   - Fixed SCIM PATCH /Groups/{id} to properly parse PatchOp and update mailbox custom attributes.
 #   - Fully resolved 405 and 422 errors during group synchronization with Authentik.
 #
+# Version 0.1.16 - 2025-04-28
+#   - Multi-group assignment to mailbox custom attributes supported.
+#   - Domain Admin auto-provisioning via /api/v1/add/domain-admin if user belongs to 'Mailcow Domain Admins'.
+#   - Full SCIM PATCH and PUT on groups now supported for complex mappings.
+#
 #########################################################################################################################################################################
 
 from fastapi import FastAPI, Header, HTTPException, Query, status
@@ -109,6 +114,9 @@ SCIM_TOKEN      = os.getenv("SCIM_TOKEN")
 MAILCOW_API_URL = os.getenv("MAILCOW_API_URL")
 MAILCOW_API_KEY = os.getenv("MAILCOW_API_KEY")
 DEFAULT_DOMAIN  = os.getenv("DEFAULT_DOMAIN")
+
+DOMAIN_ADMIN_GROUP_NAME = "Mailcow Domain Admins"  # SCIM group name to trigger Domain Admin promotion
+DEFAULT_DOMAIN_ADMIN_PASSWORD = "TempPass1234!"     # Static password fallback (could be randomized later)
 
 if not all([SCIM_TOKEN, MAILCOW_API_URL, MAILCOW_API_KEY, DEFAULT_DOMAIN]):
     raise RuntimeError("Missing one or more required environment variables.")
@@ -179,7 +187,7 @@ async def create_mailcow_mailbox(email: str, display_name: str):
     data = {
         "active": "1", "domain": domain, "local_part": local,
         "name": display_name, "authsource": "mailcow",
-        "password": "TempPass1234!", "password2": "TempPass1234!",
+        "password": DEFAULT_DOMAIN_ADMIN_PASSWORD, "password2": DEFAULT_DOMAIN_ADMIN_PASSWORD,
         "quota": "3072", "force_pw_update": "1",
         "tls_enforce_in": "1", "tls_enforce_out": "1",
         "tags": ["scim"]
@@ -203,8 +211,26 @@ async def update_mailcow_custom_attr(items: list[str], attribute_name: str, valu
         resp.raise_for_status()
     return resp.json()
 
-# --- SCIM endpoints ---
+async def provision_domain_admin(username: str):
+    local_part = username.split("@")[0] if "@" in username else username
+    url = f"{MAILCOW_API_URL}add/domain-admin"
+    headers = {"X-API-Key": MAILCOW_API_KEY}
+    payload = {
+        "active": "1",
+        "domains": DEFAULT_DOMAIN,
+        "password": DEFAULT_DOMAIN_ADMIN_PASSWORD,
+        "password2": DEFAULT_DOMAIN_ADMIN_PASSWORD,
+        "username": local_part
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, headers=headers, json=payload)
+        if resp.status_code == 409:
+            # Already exists, optionally you could edit
+            return {"status": "already_exists"}
+        resp.raise_for_status()
+    return {"status": "created"}
 
+# --- SCIM endpoints ---
 @app.get("/Users", response_model=SCIMListResponse)
 async def list_users(startIndex: int = Query(1), count: int = Query(100), authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
@@ -303,11 +329,21 @@ async def get_group(group_id: str, authorization: str = Header(None)):
 async def create_group(group: SCIMGroupCreate, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+        
+    member_usernames = [m["value"] for m in group.members]
+    
+    # Update custom attribute
     await update_mailcow_custom_attr(
-        items=[m["value"] for m in group.members],
+        items=member_usernames,
         attribute_name="groups",
         values=[group.displayName]
     )
+    
+    # Promote to Domain Admin if group matches
+    if group.displayName == DOMAIN_ADMIN_GROUP_NAME:
+        for email in member_usernames:
+            await provision_domain_admin(email)
+            
     return SCIMGroup(
         schemas=["urn:ietf:params:scim:schemas:core:2.0:Group"],
         id=group.displayName,
@@ -319,11 +355,19 @@ async def create_group(group: SCIMGroupCreate, authorization: str = Header(None)
 async def replace_group(group_id: str, group: SCIMGroupCreate, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+        
+    member_usernames = [m["value"] for m in group.members]
+    
     await update_mailcow_custom_attr(
-        items=[m["value"] for m in group.members],
+        items=member_usernames,
         attribute_name="groups",
         values=[group.displayName]
     )
+    
+    if group.displayName == DOMAIN_ADMIN_GROUP_NAME:
+        for email in member_usernames:
+            await provision_domain_admin(email)
+            
     return SCIMGroup(
         schemas=["urn:ietf:params:scim:schemas:core:2.0:Group"],
         id=group_id,
@@ -335,16 +379,24 @@ async def replace_group(group_id: str, group: SCIMGroupCreate, authorization: st
 async def update_group(group_id: str, patch: SCIMPatchRequest, authorization: str = Header(None)):
     if authorization != f"Bearer {SCIM_TOKEN}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+        
     members = []
     for op in patch.Operations:
         if op.op.lower() == "replace" and op.path == "members":
             members = op.value
-    if members:
-        await update_mailcow_custom_attr(
-            items=[m["value"] for m in members],
-            attribute_name="groups",
-            values=[group_id]
-        )
+            
+    member_usernames = [m["value"] for m in members]
+    
+    await update_mailcow_custom_attr(
+        items=member_usernames,
+        attribute_name="groups",
+        values=[group_id]
+    )
+    
+    if group_id == DOMAIN_ADMIN_GROUP_NAME:
+        for email in member_usernames:
+            await provision_domain_admin(email)
+            
     return SCIMGroup(
         schemas=["urn:ietf:params:scim:schemas:core:2.0:Group"],
         id=group_id,

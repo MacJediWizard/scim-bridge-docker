@@ -10,6 +10,8 @@ Built by MacJediWizard 🚀
 ## Features
 - FastAPI SCIM 2.0 Server
 - Automatic mailbox creation in Mailcow
+- Automatic mailbox custom attribute updates (groups)
+- Automatic promotion to Mailcow Domain Admins (based on SCIM group membership)
 - Dockerized for easy deployment
 - Secure SCIM token authentication
 - Healthcheck endpoint
@@ -21,13 +23,13 @@ Built by MacJediWizard 🚀
 
 ### 1. Clone and Build
 
-\`\`\`bash
+```bash
 git clone https://github.com/YOURUSERNAME/scim-bridge-docker.git
 cd scim-bridge-docker
 cp .env.example .env
 # Edit the .env file with your secrets
 docker compose up -d
-\`\`\`
+```
 
 ---
 
@@ -38,6 +40,7 @@ docker compose up -d
 | `SCIM_TOKEN`    | Bearer token that Authentik will use to authenticate SCIM requests |
 | `MAILCOW_API_URL` | URL to your Mailcow API endpoint (e.g., `https://mail.example.com/api/v1/`) |
 | `MAILCOW_API_KEY` | API key generated from Mailcow Admin UI |
+| `DEFAULT_DOMAIN` | Your primary Mailcow domain (e.g., `example.com`) |
 | `API_PORT`      | (Optional) Port to expose SCIM server (default: 8484) |
 
 ---
@@ -46,21 +49,20 @@ docker compose up -d
 
 | Path     | Method | Purpose |
 |:---------|:------:|:--------|
-| `/`      | `GET`  | Healthcheck (`{"status": "running"}`) |
-| `/Users` | `POST` | Create a new Mailcow mailbox based on SCIM user |
-
-SCIM `/Users` POST will:
-- Create a new Mailcow mailbox
-- Set a temporary password
-- Force password update on first login
+| `/healthz` | `GET` | Healthcheck (`{"status": "running"}`) |
+| `/ServiceProviderConfig` | `GET` | SCIM service provider metadata |
+| `/Users` | `GET`, `POST`, `PUT` | Manage Mailcow mailbox users |
+| `/Groups` | `GET`, `POST`, `PUT`, `PATCH` | Manage Mailcow mailbox group memberships via custom attributes |
 
 ---
 
 ## How it Works
 
-1. Authentik SCIM provider calls `/Users` with a SCIM payload.
-2. The FastAPI app validates the SCIM token.
-3. The app sends a request to Mailcow Admin API to create the user mailbox.
+1. Authentik SCIM provider syncs Users and Groups to the FastAPI SCIM Bridge.
+2. The FastAPI app validates the SCIM bearer token.
+3. The app creates mailboxes automatically via Mailcow Admin API.
+4. Users' `custom-attributes` are updated with their SCIM group memberships.
+5. If a user belongs to the special group "Mailcow Domain Admins", they are automatically promoted to a Domain Admin in Mailcow.
 
 ---
 
@@ -68,7 +70,7 @@ SCIM `/Users` POST will:
 
 - Docker
 - Docker Compose
-- Git (to clone)
+- Git (to clone the repository)
 
 ---
 

@@ -27,7 +27,7 @@ This guide explains how to deploy the SCIM Bridge Docker container into Portaine
 
 Paste the following minimal `docker-compose.yml`:
 
-\`\`\`yaml
+```yaml
 version: "3.9"
 
 services:
@@ -39,7 +39,7 @@ services:
     env_file:
       - .env
     restart: unless-stopped
-\`\`\`
+```
 
 **Important:**  
 Make sure the `.env` file is available to Portainer, or manually fill in environment variables.
@@ -50,14 +50,13 @@ Make sure the `.env` file is available to Portainer, or manually fill in environ
 
 If you don't use `.env`, manually add these variables in Portainer UI:
 
-Raw table:
-
-Variable | Example Value
----------|---------------
-`SCIM_TOKEN` | yourlongsecuretoken
-`MAILCOW_API_URL` | https://mail.example.com/api/v1/
-`MAILCOW_API_KEY` | your-mailcow-api-key
-`API_PORT` | 8484
+| Variable        | Example Value |
+|:----------------|:--------------|
+| `SCIM_TOKEN`    | yourlongsecuretoken |
+| `MAILCOW_API_URL` | https://mail.example.com/api/v1/ |
+| `MAILCOW_API_KEY` | your-mailcow-api-key |
+| `DEFAULT_DOMAIN` | example.com |
+| `API_PORT`      | 8484 |
 
 ---
 
@@ -65,13 +64,13 @@ Variable | Example Value
 
 - Click **Deploy the stack**.
 - Wait until the container is up.
-- Navigate to `http://your-server:8484/` to verify the healthcheck.
+- Navigate to `http://your-server:8484/healthz` to verify the healthcheck.
 
 You should see:
 
-\`\`\`json
+```json
 {"status": "running"}
-\`\`\`
+```
 
 ---
 

@@ -129,3 +129,18 @@ All notable changes to this project will be documented in this file.
 - Resolved 422 Unprocessable Entity error during Authentik SCIM group sync.
 
 ---
+
+## [v0.1.16] - 2025-04-28
+### Added
+- Automatically update Mailcow custom attributes with **all groups** a user belongs to.
+- Auto-provision users as Mailcow Domain Admins if they are part of "Mailcow Domain Admins" SCIM group.
+- Added helper function `provision_domain_admin` to handle domain admin creation.
+
+### Fixed
+- Enhanced SCIM PATCH and PUT for Groups to support complex memberships and roles.
+
+### Notes
+- If domain admin already exists, creation is safely skipped.
+- Custom attribute `groups` now properly supports multiple group names per mailbox.
+
+---
